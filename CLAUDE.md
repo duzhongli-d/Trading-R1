@@ -135,14 +135,14 @@ A tool is one file under `trading_r1/tools/<family>/<domain>/<name>.py` exportin
 
 ```python
 SPEC = ToolSpec(
-    name="data_equity_ratios",          # underscored wire name
+    name="data_equity_ratios",  # underscored wire name
     display_name="data.equity.ratios",  # dotted display path; the taxonomy reads it
-    result_kind="data",                 # data | compute | web | control
-    tier="deferred",                    # "core" is always visible to the model
-    description=_DESCRIPTION,           # >= 30 chars; the first sentence is the catalog line
-    request_schema=EquityRatiosRequest, # a pydantic model
-    handler=_handler,                   # async, returns a Result or raises ToolError
-    output=RatiosOutput,                # a pydantic model
+    result_kind="data",  # data | compute | web | control
+    tier="deferred",  # "core" is always visible to the model
+    description=_DESCRIPTION,  # >= 30 chars; the first sentence is the catalog line
+    request_schema=EquityRatiosRequest,  # a pydantic model
+    handler=_handler,  # async, returns a Result or raises ToolError
+    output=RatiosOutput,  # a pydantic model
     tags=("equity", "ratios", ...),
 )
 ```
