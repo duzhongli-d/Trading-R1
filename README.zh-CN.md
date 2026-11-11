@@ -140,6 +140,123 @@ trading-r1 daemon install      # also: status, logs, start, stop, restart, unins
 
 命令、设置、会话同步、你的数据和密钥、配置以及添加技能，都在[用户手册](MANUAL.md)中。如果要参与代码开发，请参阅[贡献指南](CONTRIBUTING.md)。
 
+## 技术栈
+
+后端是 Python，终端是 TypeScript，两者通过 HTTP 和 SSE（服务器推送事件）通信。
+
+| 部分 | 所用技术 |
+|---|---|
+| 服务 | FastAPI, uvicorn |
+| 传输契约 | pydantic |
+| 模型提供方 | openai, google-genai, anthropic |
+| 行情与联网 | httpx, ddgs, trafilatura, pdfplumber |
+| 计算 | numpy, scipy |
+| 报告 | reportlab, svgelements, markdown-it-py |
+| 定时任务 | cronsim |
+| 终端界面 | Bun, SolidJS, OpenTUI, TypeScript |
+| 构建与检查 | uv, hatchling, ruff, Biome |
+
+## 项目结构
+
+```
+.
+├── assets/
+├── tui/
+│   └── src/
+│       ├── components/
+│       ├── lib/
+│       ├── setup/
+│       ├── theme/
+│       └── ui/
+└── trading_r1/
+    ├── cli/
+    ├── contract/
+    ├── delivery/
+    ├── host/
+    ├── providers/
+    ├── report/
+    ├── runtime/
+    │   └── session/
+    ├── scheduler/
+    ├── service/
+    │   └── routes/
+    ├── skills/
+    ├── state/
+    ├── sync/
+    └── tools/
+        ├── compute/
+        │   ├── derivatives/
+        │   ├── fixed_income/
+        │   ├── modeling/
+        │   ├── portfolio/
+        │   ├── risk/
+        │   ├── statistics/
+        │   ├── technical/
+        │   └── valuation/
+        ├── core/
+        ├── data/
+        └── web/
+```
+
+| 目录 | 内容 |
+|---|---|
+| `trading_r1/contract/` | 各层共享的传输契约 |
+| `trading_r1/state/` | `$TR1_HOME` 下的磁盘状态 |
+| `trading_r1/providers/` | 模型配置与各家协议 |
+| `trading_r1/runtime/` | 智能体及其运行机制 |
+| `trading_r1/tools/` | 按族划分的工具接口 |
+| `trading_r1/service/` | FastAPI 应用 |
+| `trading_r1/delivery/` | 报告渠道 |
+| `trading_r1/scheduler/` | 定时任务 |
+| `trading_r1/sync/` | 会话同步 |
+| `trading_r1/report/` | PDF 与 HTML 渲染 |
+| `trading_r1/cli/` | 命令行 |
+| `trading_r1/host/` | 每用户唯一的后端及其托管 |
+| `trading_r1/skills/` | 内置的 17 个 `SKILL.md` 配方 |
+| `tui/src/` | 终端界面 |
+| `assets/` | 标识与图片素材 |
+
+## 开发
+
+你需要 Python 3.12 或更高版本、uv 和 Bun 1.3 或更高版本。仓库在 `.python-version` 中固定 Python 3.12。
+
+```bash
+uv sync --locked                          # the backend
+cd tui && bun install --frozen-lockfile   # the terminal UI
+```
+
+有三种运行方式：
+
+- 从检出的代码运行整个应用：`uv run trading-r1`。它会连接正在运行的后端，或在进程内启动一个，然后把终端界面作为子进程启动。
+- 只运行服务：`make dev`，也就是 `uv run trading-r1 serve --reload`：uvicorn 自动重载，不加锁，也不校验令牌。
+- 只运行终端界面：`cd tui && bun --conditions=browser src/index.tsx`（或 `bun run dev`）。必须带上 `--conditions=browser`。Bun 默认的 `node` 条件会把 solid-js 解析到它的 SSR 构建，响应式是空壳，信号写入会让界面崩溃。
+
+要遵守三条约定：
+
+- 分层只向下依赖：先是 `contract`、`state` 和 `providers`，再是 `runtime`，最后是 `tools` 和 `service`。`runtime` 不导入 `tools`。
+- 每个源文件都以版权声明和 SPDX 行开头。
+- `tui/src/lib/events.gen.ts` 和 `assets/taxonomy.svg` 是生成的文件，请交给维护者处理。
+
+一个工具就是 `trading_r1/tools/<family>/<domain>/<name>.py` 下的一个文件，导出一个 `SPEC`，再加入该包 `__init__.py` 中的 `*_SPECS` 列表。细节见[贡献指南](CONTRIBUTING.md)和[CLAUDE.md](CLAUDE.md)。
+
+## 测试
+
+**本仓库没有 pytest 测试套件，`make smoke` 就是测试套件。**
+
+`make smoke` 检查这些：
+
+- `trading-r1 --version` 能运行
+- 每个子命令的 `--help` 都能用：`serve`、`export`、`sessions`、`channels`、`jobs`、`secrets`、`daemon`、`sync`
+- 后端在一个空闲端口上启动并响应 `/livez`
+- 终端界面按锁文件安装依赖，并用 `tsc --noEmit` 做类型检查
+
+```bash
+make lint    # ruff check, ruff format --check, Biome format
+make smoke   # the test suite
+```
+
+CI 只运行 `make lint` 和 `make smoke`，在 Python 3.12 和 3.14 上，在 Ubuntu 和 macOS 上，一共四种组合。它还运行 `uv sync --locked` 和 `uv tool install . && trading-r1 --version`。
+
 ## 引用
 
 ```bibtex

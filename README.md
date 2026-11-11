@@ -149,6 +149,135 @@ After you update, or change a key in your shell profile, run `trading-r1 daemon 
 Commands, settings, session sync, your data and keys, configuration and adding a skill are in the
 [user manual](MANUAL.md). To work on the code, see [CONTRIBUTING](CONTRIBUTING.md).
 
+## Tech stack
+
+The backend is Python, the terminal is TypeScript, and the two talk over HTTP and server-sent
+events.
+
+| Part | Built with |
+|---|---|
+| Service | FastAPI, uvicorn |
+| Wire contract | pydantic |
+| Model providers | openai, google-genai, anthropic |
+| Market data and web | httpx, ddgs, trafilatura, pdfplumber |
+| Compute | numpy, scipy |
+| Reports | reportlab, svgelements, markdown-it-py |
+| Scheduling | cronsim |
+| Terminal UI | Bun, SolidJS, OpenTUI, TypeScript |
+| Build and lint | uv, hatchling, ruff, Biome |
+
+## Project structure
+
+```
+.
+├── assets/
+├── tui/
+│   └── src/
+│       ├── components/
+│       ├── lib/
+│       ├── setup/
+│       ├── theme/
+│       └── ui/
+└── trading_r1/
+    ├── cli/
+    ├── contract/
+    ├── delivery/
+    ├── host/
+    ├── providers/
+    ├── report/
+    ├── runtime/
+    │   └── session/
+    ├── scheduler/
+    ├── service/
+    │   └── routes/
+    ├── skills/
+    ├── state/
+    ├── sync/
+    └── tools/
+        ├── compute/
+        │   ├── derivatives/
+        │   ├── fixed_income/
+        │   ├── modeling/
+        │   ├── portfolio/
+        │   ├── risk/
+        │   ├── statistics/
+        │   ├── technical/
+        │   └── valuation/
+        ├── core/
+        ├── data/
+        └── web/
+```
+
+| Directory | Holds |
+|---|---|
+| `trading_r1/contract/` | the wire contract every layer shares |
+| `trading_r1/state/` | on-disk state under `$TR1_HOME` |
+| `trading_r1/providers/` | model profiles and wire protocols |
+| `trading_r1/runtime/` | the agent and its machinery |
+| `trading_r1/tools/` | the tool surface, by family |
+| `trading_r1/service/` | the FastAPI app |
+| `trading_r1/delivery/` | report channels |
+| `trading_r1/scheduler/` | cron jobs |
+| `trading_r1/sync/` | session sync |
+| `trading_r1/report/` | PDF and HTML rendering |
+| `trading_r1/cli/` | the command line |
+| `trading_r1/host/` | the one backend per user |
+| `trading_r1/skills/` | the 17 bundled `SKILL.md` recipes |
+| `tui/src/` | the terminal UI |
+| `assets/` | logos and media |
+
+## Development
+
+You need Python 3.12 or later, uv, and Bun 1.3 or later. The repo pins Python 3.12 in
+`.python-version`.
+
+```bash
+uv sync --locked                          # the backend
+cd tui && bun install --frozen-lockfile   # the terminal UI
+```
+
+Run it in one of three ways:
+
+- The whole app from a checkout: `uv run trading-r1`. It attaches to a running backend or starts
+  one in-process, then execs the terminal UI as a child.
+- The service alone: `make dev`, which is `uv run trading-r1 serve --reload`: uvicorn with
+  auto-reload, no lock and no token.
+- The terminal UI alone: `cd tui && bun --conditions=browser src/index.tsx` (or `bun run dev`).
+  `--conditions=browser` is required. Bun's default `node` condition resolves solid-js to its SSR
+  build, whose reactivity is stubbed and whose signal writes crash the UI.
+
+Three conventions to keep:
+
+- Layers import downward: `contract`, `state` and `providers`, then `runtime`, then `tools` and
+  `service`. `runtime` does not import `tools`.
+- Every source file opens with the copyright and SPDX lines.
+- `tui/src/lib/events.gen.ts` and `assets/taxonomy.svg` are generated; leave them to a maintainer.
+
+A tool is one file under `trading_r1/tools/<family>/<domain>/<name>.py` exporting a `SPEC`, added
+to the `*_SPECS` list in that package's `__init__.py`. The details are in
+[CONTRIBUTING](CONTRIBUTING.md) and [CLAUDE.md](CLAUDE.md).
+
+## Testing
+
+**There is no pytest suite in this repository; `make smoke` is the test suite.**
+
+What `make smoke` checks:
+
+- `trading-r1 --version` runs
+- every subcommand's `--help` works: `serve`, `export`, `sessions`, `channels`, `jobs`, `secrets`,
+  `daemon`, `sync`
+- the backend boots on a free port and answers `/livez`
+- the terminal UI installs from its lockfile and typechecks with `tsc --noEmit`
+
+```bash
+make lint    # ruff check, ruff format --check, Biome format
+make smoke   # the test suite
+```
+
+CI runs `make lint` and `make smoke` only, on Python 3.12 and 3.14, on Ubuntu and macOS, four
+combinations in all. It also runs `uv sync --locked` and
+`uv tool install . && trading-r1 --version`.
+
 ## Citation
 
 ```bibtex
